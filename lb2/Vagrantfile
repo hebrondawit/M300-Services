@@ -1,0 +1,66 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# Vagrantfile API/syntax version. Don't touch unless you know what you're doing!
+VAGRANTFILE_API_VERSION = "2"
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+  # All Vagrant configuration is done here. The most common configuration
+  # options are documented and commented below. For a complete reference,
+  # please see the online documentation at vagrantup.com.
+
+  # Every Vagrant virtual environment requires a box to build off of.
+  # config.vm.network "forwarded_port", guest: 3306, host: 3306
+  config.vm.define "backend" do |db|
+    db.vm.box = "ubuntu/xenial64"
+    db.vm.hostname = "sidv01"
+    db.vm.network "private_network", ip: "192.168.55.100"
+	db.vm.network "forwarded_port", guest:80, host:8080, auto_correct: true
+    # MySQL Port nur im Private Network sichtbar
+	  # db.vm.network "forwarded_port", guest:3306, host:3306, auto_correct: false
+	db.vm.provider "virtualbox" do |vb|
+	  vb.memory = "512"
+	# config.vm.provision "file", source: "~/templates", destination: "/etc/"	  	  
+	end
+	db.vm.provision "shell", inline: <<-SHELL
+		sudo apt-get update
+		sudo apt-get -y install samba
+		sudo apt-get -y install apache2
+		ufw enable
+ufw allow 22
+ufw allow 3306
+
+# Install essential packages
+apt-get -y install zsh htop
+
+# Install MySQL Server in a Non-Interactive mode. Default root password will be "root"
+echo "mysql-server-5.6 mysql-server/root_password password root" | sudo debconf-set-selections
+echo "mysql-server-5.6 mysql-server/root_password_again password root" | sudo debconf-set-selections
+apt-get -y install mysql-server-5.7 #phpmyadmin
+
+
+# Run the MySQL Secure Installation wizard
+mysql_secure_installation
+
+sed -i 's/127.0.0.1/0.0.0.0/g' /etc/mysql/my.cnf
+mysql -uroot -p -e 'USE mysql; UPDATE user SET Host="%" WHERE User="root" AND Host="localhost"; DELETE FROM user WHERE Host != "%" AND User="root"; FLUSH PRIVILEGES;'
+
+service mysql restart
+
+		
+SHELL
+  end
+  
+  config.vm.define "web" do |web|
+    web.vm.box = "ubuntu/xenial64"
+    web.vm.hostname = "sidv02"
+    web.vm.network "private_network", ip:"192.168.55.101" 
+	web.vm.provider "virtualbox" do |vb|
+	  vb.memory = "512"  
+	end       
+	web.vm.provision "shell", inline: <<-SHELL
+		sudo apt-get update
+		sudo apt-get -y install apache2
+SHELL
+	end  
+ end
